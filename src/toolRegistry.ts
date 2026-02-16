@@ -15,6 +15,26 @@ export const createToolRegistry = (manager: ThreadsManager): ToolRegistry<ToolNa
         alt_text: parsed.alt_text,
       });
     },
+    th_post_photo: async (args) => {
+      const parsed = parseToolArgs(toolSchemas.th_post_photo, args);
+      return manager.postThread(parsed.text, "IMAGE", parsed.url, { alt_text: parsed.alt_text });
+    },
+    th_post_video: async (args) => {
+      const parsed = parseToolArgs(toolSchemas.th_post_video, args);
+      return manager.postThread(parsed.text, "VIDEO", parsed.url, { alt_text: parsed.alt_text });
+    },
+    th_post_carousel: async (args) => {
+      const parsed = parseToolArgs(toolSchemas.th_post_carousel, args);
+      return manager.postCarousel(parsed.items, parsed.text);
+    },
+    th_get_replies: async (args) => {
+      const parsed = parseToolArgs(toolSchemas.th_get_replies, args);
+      return manager.getReplies(parsed.media_id, parsed.limit, parsed.cursor);
+    },
+    th_reply: async (args) => {
+      const parsed = parseToolArgs(toolSchemas.th_reply, args);
+      return manager.replyToThread(parsed.media_id, parsed.text);
+    },
     th_get_user_threads: async (args) => {
       const parsed = parseToolArgs(toolSchemas.th_get_user_threads, args);
       return manager.getUserThreads(parsed.limit);

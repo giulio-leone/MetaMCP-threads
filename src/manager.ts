@@ -36,6 +36,7 @@ export class ThreadsManager {
     async postThread(text?: string, mediaType: "TEXT" | "IMAGE" | "VIDEO" = "TEXT", mediaUrl?: string, options: {
         reply_control?: "everyone" | "accounts_you_follow" | "mentioned_only";
         quote_post_id?: string;
+        reply_to_id?: string;
         link_attachment?: string;
         alt_text?: string;
     } = {}): Promise<Record<string, unknown>> {
@@ -65,6 +66,67 @@ export class ThreadsManager {
 
         // Step 2: Publish Container
         return this.publishThread(container.id);
+    }
+
+    async postCarousel(items: { url: string; media_type: "IMAGE" | "VIDEO"; alt_text?: string }[], text?: string): Promise<Record<string, unknown>> {
+        // Step 1: Create Item Containers
+        const childrenIds: string[] = [];
+        for (const item of items) {
+            const itemParams: Record<string, any> = {
+                media_type: item.media_type,
+                is_carousel_item: true,
+            };
+            if (item.media_type === "IMAGE") itemParams.image_url = item.url;
+            if (item.media_type === "VIDEO") itemParams.video_url = item.url;
+            if (item.alt_text) itemParams.alt_text = item.alt_text;
+
+            const container = await this.request("me/threads", "POST", itemParams) as { id: string };
+            if (container.id) childrenIds.push(container.id);
+        }
+
+        if (childrenIds.length === 0) {
+            throw new Error("Failed to create carousel items");
+        }
+
+        // Step 2: Create Carousel Container
+        const creationParams: Record<string, any> = {
+            media_type: "CAROUSEL",
+            children: childrenIds.join(","), // Threads API expects comma-separated string or array? Usually array/string. Graph API v19+ often accepts array, but let's check. 
+            // IG uses array of IDs. Let's send array first (client.request stringifies it if needed? No, usually not).
+            // But wait, `children` is usually a list of IDs.
+            // Let's assume comma-separated string for safety if it enters query params, or array if JSON body.
+            // Since `batchRequest` logic in core suggests JSON body, Array is likely correct.
+            // However, `request` method in `ThreadsManager` passes params. `GraphApiClient` puts params in query string for GET, 
+            // and usually body for POST?
+            // `GraphApiClient` implementation: if method is POST and body is provided, it uses body. If params provided, it uses params (query string).
+            // `ThreadsManager.request` passes `params`. `GraphApiClient` treats `params` as URLSearchParams.
+            // URLSearchParams does NOT handle arrays well (it repeats keys `children=1&children=2`).
+            // Meta APIs often want `children` as a comma-separated string in query params.
+        };
+        creationParams.children = childrenIds.join(",");
+
+        if (text) creationParams.text = text;
+
+        const container = await this.request("me/threads", "POST", creationParams) as { id: string };
+
+        // Step 3: Publish
+        return this.publishThread(container.id);
+    }
+
+    async getReplies(mediaId: string, limit = 25, cursor?: string): Promise<Record<string, unknown>> {
+        return this.request(
+            `${mediaId}/replies`,
+            "GET",
+            {
+                fields: "id,text,username,timestamp,like_count,reply_count",
+                limit,
+                after: cursor,
+            }
+        );
+    }
+
+    async replyToThread(mediaId: string, text: string): Promise<Record<string, unknown>> {
+        return this.postThread(text, "TEXT", undefined, { reply_to_id: mediaId });
     }
 
     async publishThread(creationId: string): Promise<Record<string, unknown>> {
